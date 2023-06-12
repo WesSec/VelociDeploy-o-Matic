@@ -1,0 +1,88 @@
+- hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+  - name: Wait for SSH to respond on all hosts!
+    wait_for_connection: 
+      timeout: 180
+
+  - name: Run [Gather Facts...] after host is responsive
+    setup:
+
+  - name: "apt-get update && apt-get upgrade -y"
+    apt:
+      update_cache: yes
+      upgrade: yes
+      cache_valid_time: 3600
+
+  - name: "install required packages"
+    apt:
+      pkg:
+        - nginx
+        - jq
+        - certbot
+        - python3-certbot-nginx
+
+  - name: Stop services to allow certbot to generate a cert.
+    service:
+      name: "nginx"
+      state: stopped
+
+  - name: Copy NGINX config patch to server
+    template:
+        src: templates/nginx.j2
+        dest: /etc/nginx/sites-enabled/default
+
+  - name: Generate new certificate if one doesn't exist.
+    shell: "certbot --nginx --redirect --noninteractive --agree-tos --email {{tf_le_email}} -d {{ tf_fqdn }} -d gui.{{ tf_fqdn }}"
+
+  - name: Download latest velociraptor
+    shell: |
+      curl https://api.github.com/repos/velocidex/velociraptor/releases/latest | jq 'limit(1 ; ( .assets[].browser_download_url | select ( contains("linux-amd64-musl") )))'| tr -d '"' | wget -i - -O /home/{{tf_vm_user}}/velociraptor;
+      chmod +x /home/{{tf_vm_user}}/velociraptor;
+    args:
+      creates: /home/{{tf_vm_user}}/velociraptor
+
+  - name: Copy Velociraptor config patch to server
+    template:
+        src: templates/veloconfig.j2
+        dest: /home/{{tf_vm_user}}/velopatch.json
+
+  - name: Generate server config file
+    shell: |
+      /home/{{tf_vm_user}}/velociraptor config generate --merge_file=/home/{{tf_vm_user}}/velopatch.json > /home/{{tf_vm_user}}/server.config.yaml
+    args:
+      creates: /home/{{tf_vm_user}}/server.config.yaml
+    
+  - name: Generate client config file
+    shell: |
+      /home/{{tf_vm_user}}/velociraptor -c /home/{{tf_vm_user}}/server.config.yaml config client > /home/{{tf_vm_user}}/client.config.yaml
+    args:
+      creates: /home/{{tf_vm_user}}/client.config.yaml
+
+  - name: Create Velociraptor service
+    copy:
+        dest: "/etc/systemd/system/velociraptor.service"
+        content: |
+          [Unit]
+          Description=Velociraptor linux amd64
+          After=syslog.target network.target
+
+          [Service]
+          Type=simple
+          Restart=always
+          RestartSec=120
+          LimitNOFILE=20000
+          Environment=LANG=en_US.UTF-8
+          ExecStart=/home/{{tf_vm_user}}/velociraptor -c /home/{{tf_vm_user}}/server.config.yaml frontend -v
+
+          [Install]
+          WantedBy=multi-user.target
+  
+  - name: Start velociraptor service
+    systemd: 
+      daemon_reload: yes
+      enabled: yes
+      name: velociraptor 
+      state: started 

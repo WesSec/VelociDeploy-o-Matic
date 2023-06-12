@@ -1,0 +1,215 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dnszone_name": {
+            "defaultValue": "yourdomain.com",
+            "type": "string",
+            "metadata": {
+                "description": "Your Velociraptor domain (subdomains will be created for each instance)"
+            }
+        },
+        "aadTenantId": {
+            "type": "string",
+            "defaultValue": "tenantstring",
+            "metadata": {
+                "description": "Azure AD Tenant ID, to be found in Tenant properties"
+            }
+        },
+        "virtualNetworks_IR_VPN_net_name": {
+            "defaultValue": "IR_VPN_net",
+            "type": "string",
+            "metadata": {
+                "description": "name of your VPN Subnet, just leave default if unsure"
+            }
+        },
+        "publicIPAddresses_IR_vpn_ip_name": {
+            "defaultValue": "IR_vpn_ip",
+            "type": "string",
+            "metadata": {
+                "description": "Just leave default"
+            }
+        },
+        "virtualNetworkGateways_IR_VPN_name": {
+            "defaultValue": "IR_VPN",
+            "type": "string",
+            "metadata": {
+                "description": "Name of your VPN, just leave default if unsure"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Network/dnsZones",
+            "apiVersion": "2018-05-01",
+            "name": "[parameters('dnszone_name')]",
+            "location": "global",
+            "properties": {
+                "zoneType": "Public"
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2022-05-01",
+            "name": "[parameters('publicIPAddresses_IR_vpn_ip_name')]",
+            "location": "westeurope",
+            "sku": {
+                "name": "Standard",
+                "tier": "Regional"
+            },
+            "properties": {
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Static",
+                "idleTimeoutInMinutes": 4,
+                "ipTags": []
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('virtualNetworks_IR_VPN_net_name'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_IR_VPN_net_name'))]"
+                ],
+            "properties": {
+                "addressPrefix": "10.0.0.0/24",
+                "delegations": [],
+                "privateEndpointNetworkPolicies": "Disabled",
+                "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('virtualNetworks_IR_VPN_net_name'), '/GatewaySubnet')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_IR_VPN_net_name'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworks_IR_VPN_net_name'), '/subnets/default')]"
+                ],
+            "properties": {
+                "addressPrefix": "10.0.2.0/24",
+                "delegations": [],
+                "privateEndpointNetworkPolicies": "Disabled",
+                "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('virtualNetworks_IR_VPN_net_name'), '/Velociraptor_instances')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_IR_VPN_net_name'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworks_IR_VPN_net_name'), '/subnets/default')]"
+                ],
+            "properties": {
+                "addressPrefix": "10.0.1.0/24",
+                "serviceEndpoints": [],
+                "delegations": [],
+                "privateEndpointNetworkPolicies": "Disabled",
+                "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworkGateways",
+            "apiVersion": "2022-05-01",
+            "name": "[parameters('virtualNetworkGateways_IR_VPN_name')]",
+            "location": "westeurope",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIPAddresses_IR_vpn_ip_name'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworks_IR_VPN_net_name'), '/subnets/default')]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworks_IR_VPN_net_name'), '/subnets/Velociraptor_instances')]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworks_IR_VPN_net_name'), '/subnets/GatewaySubnet')]"
+            ],
+            "properties": {
+                "enablePrivateIpAddress": false,
+                "ipConfigurations": [
+                    {
+                        "name": "default",
+                        "id": "[concat(resourceId('Microsoft.Network/virtualNetworkGateways', parameters('virtualNetworkGateways_IR_VPN_name')), '/ipConfigurations/default')]",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIPAddresses_IR_vpn_ip_name'))]"
+                            },
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworks_IR_VPN_net_name'), 'GatewaySubnet')]"
+                            }
+                        }
+                    }
+                ],
+                "natRules": [],
+                "virtualNetworkGatewayPolicyGroups": [],
+                "enableBgpRouteTranslationForNat": false,
+                "disableIPSecReplayProtection": false,
+                "sku": {
+                    "name": "VpnGw1",
+                    "tier": "VpnGw1"
+                },
+                "gatewayType": "Vpn",
+                "vpnType": "RouteBased",
+                "enableBgp": false,
+                "activeActive": false,
+                "vpnClientConfiguration": {
+                    "vpnClientAddressPool": {
+                        "addressPrefixes": [
+                            "10.12.0.0/15"
+                        ]
+                    },
+                    "vpnClientProtocols": [
+                        "OpenVPN"
+                    ],
+                    "vpnAuthenticationTypes": [
+                        "AAD"
+                    ],
+                    "vpnClientRootCertificates": [],
+                    "vpnClientRevokedCertificates": [],
+                    "vngClientConnectionConfigurations": [],
+                    "radiusServers": [],
+                    "vpnClientIpsecPolicies": [],
+                    "aadTenant": "[concat('https://login.microsoftonline.com/', parameters('aadTenantId'))]",
+                    "aadAudience": "41b23e61-6c1e-4545-b367-cd054e0ed4b4",
+                    "aadIssuer": "[concat('https://sts.windows.net/', parameters('aadTenantId'), '/')]"
+                },
+                "bgpSettings": {
+                    "asn": 65515,
+                    "bgpPeeringAddress": "10.0.2.254",
+                    "peerWeight": 0,
+                    "bgpPeeringAddresses": [
+                        {
+                            "ipconfigurationId": "[concat(resourceId('Microsoft.Network/virtualNetworkGateways', parameters('virtualNetworkGateways_IR_VPN_name')), '/ipConfigurations/default')]",
+                            "customBgpIpAddresses": []
+                        }
+                    ]
+                },
+                "customRoutes": {
+                    "addressPrefixes": []
+                },
+                "vpnGatewayGeneration": "Generation1",
+                "allowRemoteVnetTraffic": false,
+                "allowVirtualWanTraffic": false
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2022-05-01",
+            "name": "[parameters('virtualNetworks_IR_VPN_net_name')]",
+            "location": "westeurope",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.0.0.0/16"
+                    ]
+                },
+                "virtualNetworkPeerings": [],
+                "enableDdosProtection": false
+            }
+        }
+    ],
+    "outputs": {
+        "dnsZoneNameServers": {
+            "type": "array",
+            "value": "[reference(concat('Microsoft.Network/dnszones/', parameters('dnszone_name')), '2018-05-01').nameServers]"
+        }
+    }
+}

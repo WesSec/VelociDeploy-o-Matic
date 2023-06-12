@@ -1,0 +1,25 @@
+# Server block for service listening for client connections
+server {
+     server_name {{ tf_fqdn }};
+
+     # Increase allowed max body size in order to accept client artifacts.
+     client_max_body_size 1000M;
+
+     location / {
+          # Pass all incoming traffic to this server to the service listening on port 8000
+         proxy_pass http://127.0.0.1:8000;
+     }     
+}
+
+# Server block for Velociraptor GUI
+server {
+     server_name gui.{{ tf_fqdn }};
+     location / {
+          proxy_pass http://127.0.0.1:8889;
+          proxy_redirect     off;
+          proxy_set_header   Host $host;
+          # Only allow traffic incoming from Azure VPN client range
+          allow 10.12.0.0/15;
+          deny all;
+     }
+}

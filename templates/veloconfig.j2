@@ -1,0 +1,31 @@
+{
+	"Client":{
+		"server_urls": ["https://{{ tf_fqdn }}/"],
+		"use_self_signed_ssl": false
+	},
+	"GUI":{
+		"bind_address": "127.0.0.1",
+		"use_plain_http": true,
+		"bind_port": 8889,
+		"public_url": "https://gui.{{ tf_fqdn }}/",
+		"initial_users":[{"name": "{{tf_default_user}}"}],
+		"authenticator":{
+			"type": "Azure",
+			"oauth_client_id": "{{tf_client_id}}",
+			"oauth_client_secret": "{{ tf_client_secret }}",
+			"tenant":"{{tf_tenant_id}}"
+		}
+	},
+	"Frontend":{
+		"hostname":"{{ tf_fqdn }}",
+		"use_plain_http": true,
+		"bind_port": 8000
+	},
+	"Datastore":{
+		"location":"/opt/velociraptor",
+		"filestore_directory":"/opt/velociraptor"
+	},
+	"Monitoring":{
+		"server_type":"linux"
+	}
+}
