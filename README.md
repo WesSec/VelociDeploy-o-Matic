@@ -2,6 +2,10 @@
 
 Quick n scaleable velociraptor deployment using Azure VPN, for the story behind this Repo please read [my blog](https://blog.wesselhissink.nl/networking/velocideploy-o-matic-the-story/), the blog also contains a walkthrough through all the 'steps' in the code.
 
+## Alternative: NOVPN version
+
+Since this setup is pretty specific, I created a 'lite' version that does not require a management resource group, a registered domain and VPN. This can save a lot in the effort needed to set up (and costs), especially in lab environments. For this version and documentation visit the [novpn branch](https://github.com/WesSec/VelociDeploy-o-Matic/tree/novpn).
+
 
 # The Idea
 
